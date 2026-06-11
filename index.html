@@ -399,7 +399,7 @@ db.ref("users").on("value", snap => {
 
 db.ref("results").on("value", snap => {
   state.results = snap.val() || {};
-  if (state.screen === "ranking" || state.screen === "tabela" || state.screen === "admin") render();
+  if (state.screen === "ranking" || state.screen === "tabela" || state.screen === "admin" || state.screen === "adminPicks" || state.screen === "palpites") render();
 });
 
 db.ref("picks").on("value", snap => {
@@ -653,17 +653,24 @@ function renderMatchRow(m, opts) {
   opts = opts || {};
   const homeVal = state.picks[m.id]?.home ?? "";
   const awayVal = state.picks[m.id]?.away ?? "";
+  const result = state.results[m.id];
+  const locked = !!(result && result.home !== "" && result.away !== "" && result.home !== undefined && result.away !== undefined);
 
-  const meta = el("div", { class: "match-meta" }, [
+  const metaChildren = [
     el("span", { class: "group-tag" }, "Grupo " + m.group + " • Rodada " + m.round),
     el("br"),
     (m.date ? el("span", { class: "when" }, m.date + " • " + m.time + " (Brasília) • " + m.local) : el("span", { class: "when" }, "Data a confirmar")),
-  ]);
+  ];
+  if (locked) {
+    metaChildren.push(el("br"));
+    metaChildren.push(el("span", { class: "when", style: { color: "var(--red)", fontWeight: "600" } }, "🔒 Encerrado • Resultado: " + result.home + "-" + result.away));
+  }
+  const meta = el("div", { class: "match-meta" }, metaChildren);
 
-  const homeInput = el("input", { type: "number", min: "0", max: "20", class: "score-input", value: homeVal });
-  homeInput.addEventListener("input", e => updatePick(m.id, "home", e.target.value));
-  const awayInput = el("input", { type: "number", min: "0", max: "20", class: "score-input", value: awayVal });
-  awayInput.addEventListener("input", e => updatePick(m.id, "away", e.target.value));
+  const homeInput = el("input", { type: "number", min: "0", max: "20", class: "score-input", value: homeVal, disabled: locked });
+  if (!locked) homeInput.addEventListener("input", e => updatePick(m.id, "home", e.target.value));
+  const awayInput = el("input", { type: "number", min: "0", max: "20", class: "score-input", value: awayVal, disabled: locked });
+  if (!locked) awayInput.addEventListener("input", e => updatePick(m.id, "away", e.target.value));
 
   const teams = el("div", { class: "match-teams" }, [
     el("span", { class: "team-name home" }, m.home),
@@ -673,7 +680,7 @@ function renderMatchRow(m, opts) {
     el("span", { class: "team-name" }, m.away),
   ]);
 
-  return el("div", { class: "match-row" }, [meta, teams]);
+  return el("div", { class: "match-row", style: locked ? { opacity: "0.7", background: "#f7f8fa" } : {} }, [meta, teams]);
 }
 
 function updatePick(matchId, side, rawVal) {
