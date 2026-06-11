@@ -295,6 +295,47 @@
   }
   .conn-online { background: var(--green); }
   .conn-offline { background: var(--red); }
+
+  table.picks-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+    min-width: 640px;
+  }
+  table.picks-table th, table.picks-table td {
+    padding: 6px 5px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.picks-table th {
+    background: var(--navy);
+    color: var(--gold-light);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+  }
+  table.picks-table th:first-child, table.picks-table td:first-child {
+    text-align: left;
+    font-weight: 600;
+    position: sticky;
+    left: 0;
+    background: var(--card);
+    z-index: 1;
+    color: var(--text);
+  }
+  table.picks-table th:first-child { background: var(--navy); color: #fff; z-index: 2; }
+  table.picks-table tr:nth-child(even) td:not(:first-child) { background: #f7f8fa; }
+  .picks-table-wrap {
+    overflow: auto;
+    max-height: 70vh;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .pt-cell-3 { color: var(--green); font-weight: 700; }
+  .pt-cell-1 { color: var(--amber); font-weight: 700; }
+  .pt-cell-0 { color: var(--red); }
+  .pt-cell-pending { color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -839,6 +880,7 @@ function renderAdmin() {
     title: "Lançar resultados oficiais",
     subtitle: "Os pontos do bolão são calculados automaticamente",
     actions: [
+      makeBtn("Ver palpites de todos", "btn-secondary", () => { state.screen = "adminPicks"; render(); }),
       makeBtn("Classificação", "btn-secondary", () => { state.screen = "ranking"; render(); }),
       makeBtn("Sair do admin", "btn-secondary", () => { state.isAdmin = false; pendingResults = {}; state.screen = "login"; render(); }),
     ],
@@ -934,6 +976,97 @@ function saveResultsHandler() {
   });
 }
 
+/* ==================== TELA: ADMIN - PALPITES DE TODOS ==================== */
+function renderAdminPicks() {
+  const root = el("div");
+  root.appendChild(renderHeader({
+    title: "Palpites de todos os colaboradores",
+    subtitle: "Visão completa - " + MATCHES.length + " jogos x " + Object.keys(state.users).length + " participante(s)",
+    actions: [
+      makeBtn("Lançar resultados", "btn-secondary", () => { state.screen = "admin"; render(); }),
+      makeBtn("Classificação", "btn-secondary", () => { state.screen = "ranking"; render(); }),
+      makeBtn("Sair do admin", "btn-secondary", () => { state.isAdmin = false; pendingResults = {}; state.screen = "login"; render(); }),
+    ],
+  }));
+  root.appendChild(connBadge());
+
+  const card = el("div", { class: "card" });
+
+  const userKeys = Object.keys(state.users);
+  if (userKeys.length === 0) {
+    card.appendChild(el("p", { class: "empty-state" }, "Ainda não há colaboradores cadastrados."));
+    root.appendChild(card);
+    return root;
+  }
+
+  card.appendChild(el("div", { class: "info-box" },
+    "Cada célula mostra o palpite do colaborador (placar mandante-visitante). A cor indica a pontuação obtida após o resultado oficial ser lançado: verde = 3 pts (placar exato), laranja = 1 pt (acertou o resultado), vermelho = 0 pt (errou)."));
+
+  const tabs = el("div", { class: "group-tabs" });
+  tabs.appendChild(makeBtn("Todos", "btn-tab" + (state.activeGroup === "ALL" ? " active" : ""), () => { state.activeGroup = "ALL"; render(); }));
+  Object.keys(GROUPS).forEach(g => {
+    tabs.appendChild(makeBtn("Grupo " + g, "btn-tab" + (state.activeGroup === g ? " active" : ""), () => { state.activeGroup = g; render(); }));
+  });
+  card.appendChild(tabs);
+
+  const matchesToShow = state.activeGroup === "ALL" ? MATCHES : MATCHES.filter(m => m.group === state.activeGroup);
+
+  // sort users by name for stable column order
+  const userRows = userKeys
+    .map(key => ({ key, name: state.users[key].name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const wrap = el("div", { class: "picks-table-wrap" });
+  const table = el("table", { class: "picks-table" });
+
+  const thead = el("thead");
+  const headRow = el("tr");
+  headRow.appendChild(el("th", null, "Jogo"));
+  userRows.forEach(u => headRow.appendChild(el("th", null, u.name)));
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = el("tbody");
+  matchesToShow.forEach(m => {
+    const result = state.results[m.id];
+    const row = el("tr");
+    const labelHome = m.home.length > 12 ? m.home.slice(0, 3).toUpperCase() : m.home;
+    const labelAway = m.away.length > 12 ? m.away.slice(0, 3).toUpperCase() : m.away;
+    const resultStr = (result && result.home !== "" && result.home !== undefined)
+      ? " (" + result.home + "-" + result.away + ")" : "";
+    row.appendChild(el("td", { title: m.home + " x " + m.away }, "G" + m.group + " " + labelHome + "x" + labelAway + resultStr));
+
+    userRows.forEach(u => {
+      const pick = (state.allPicks[u.key] || {})[m.id];
+      let cellText = "—";
+      let cellClass = "";
+      if (pick && pick.home !== "" && pick.away !== "") {
+        cellText = pick.home + "-" + pick.away;
+        const pts = calcPoints(pick, result);
+        if (pts === 3) cellClass = "pt-cell-3";
+        else if (pts === 1) cellClass = "pt-cell-1";
+        else if (pts === 0) cellClass = "pt-cell-0";
+        else cellClass = "pt-cell-pending";
+      }
+      row.appendChild(el("td", { class: cellClass }, cellText));
+    });
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  card.appendChild(wrap);
+
+  card.appendChild(el("div", { class: "legend" }, [
+    el("span", null, [el("span", { class: "dot dot-3" }), " 3 pts: placar exato"]),
+    el("span", null, [el("span", { class: "dot dot-1" }), " 1 pt: acertou o resultado"]),
+    el("span", null, [el("span", { class: "dot dot-0" }), " 0 pt: errou"]),
+    el("span", null, "— : sem palpite"),
+  ]));
+
+  root.appendChild(card);
+  return root;
+}
+
 /* ==================== RENDER PRINCIPAL ==================== */
 function render() {
   const app = document.getElementById("app");
@@ -946,6 +1079,7 @@ function render() {
     case "tabela": view = renderTabela(); break;
     case "adminLogin": view = renderAdminLogin(); break;
     case "admin": view = renderAdmin(); break;
+    case "adminPicks": view = renderAdminPicks(); break;
     default: view = renderLogin();
   }
   app.appendChild(view);
