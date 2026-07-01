@@ -433,7 +433,7 @@ function renderAdmin(){
   }));
   root.appendChild(connBadge());
   const card=el("div",{class:"card"});
-  card.appendChild(el("div",{class:"info-box"},"Lance o placar após o apito final. Se houver pênaltis, preencha o campo adicional (informação apenas — a pontuação usa o placar normal). O vencedor é propagado automaticamente para a próxima fase."));
+  card.appendChild(el("div",{class:"info-box"},"Lance o placar após o apito final. Se houver pênaltis, preencha o campo adicional (informação apenas — pontuação usa placar normal). Para cada jogo, preencha também os nomes dos times manualmente nos campos indicados."));
   const phaseTabs=el("div",{class:"phase-nav"});
   [{k:"r32",l:"16 Avos"},{k:"r16",l:"Oitavas"},{k:"qf",l:"Quartas"},{k:"sf",l:"Semi"},{k:"final",l:"Final/3º"}].forEach(p=>{
     phaseTabs.appendChild(makeBtn(p.l,"btn-tab"+(state.activePhaseTabela===p.k?" active":""),()=>{state.activePhaseTabela=p.k;render();}));
@@ -448,7 +448,7 @@ function renderAdmin(){
     const dispAway=(pendingTeams[tmpl.id+"_away"]!==undefined?pendingTeams[tmpl.id+"_away"]:(kt[tmpl.id+"_away"]||tmpl.away));
     const rows=[];
     // If teams still unknown, show text inputs
-    if(dispHome==="?"||dispAway==="?"){
+    if(true){
       const tr=el("div",{style:{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap",marginBottom:"6px",fontSize:"12px",color:"var(--text-muted)"}});
       tr.appendChild(document.createTextNode("Times: "));
       const hi2=el("input",{type:"text",class:"team-text-input",placeholder:"Mandante",value:dispHome==="?"?"":dispHome});
@@ -497,18 +497,9 @@ function getWinner(rh,ra,pen,homeName,awayName){
 function saveResultsHandler(){
   const merged=JSON.parse(JSON.stringify(state.results||{}));
   Object.keys(pendingResults).forEach(id=>{const r=pendingResults[id];if(r.home!==""&&r.away!=="")merged[id]={home:r.home,away:r.away,penalties:r.penalties||""};else delete merged[id];});
+  // Manual team names only — no auto-propagation
   const mergedTeams=JSON.parse(JSON.stringify(state.knockoutTeams||{}));
-  Object.keys(pendingTeams).forEach(k=>{if(pendingTeams[k])mergedTeams[k]=pendingTeams[k];});
-  // Propagate winners
-  KNOCKOUT_TEMPLATE.forEach(tmpl=>{
-    const r=merged[tmpl.id];if(!r||r.home===""||r.away==="")return;
-    const hn=mergedTeams[tmpl.id+"_home"]||tmpl.home;const an=mergedTeams[tmpl.id+"_away"]||tmpl.away;
-    if(hn==="?"||an==="?")return;
-    const winner=getWinner(r.home,r.away,r.penalties,hn,an);
-    const loser=winner?((winner===hn)?an:hn):null;
-    if(tmpl.nextId&&winner)mergedTeams[tmpl.nextId+"_"+tmpl.nextSide]=winner;
-    if(tmpl.nextLoser&&loser&&tmpl.nextLoserSide)mergedTeams[tmpl.nextLoser+"_"+tmpl.nextLoserSide]=loser;
-  });
+  Object.keys(pendingTeams).forEach(k=>{if(pendingTeams[k]&&pendingTeams[k].trim())mergedTeams[k]=pendingTeams[k].trim();});
   state.saveStatus="saving-results";render();
   Promise.all([db.ref("results").set(merged),db.ref("knockoutTeams").set(mergedTeams)]).then(()=>{
     pendingResults={};pendingTeams={};state.saveStatus="saved-results";render();
